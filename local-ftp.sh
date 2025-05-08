@@ -6,19 +6,27 @@
 #H# Examples:
 #H#   ./local-ftp.sh
 #H#   ./local-ftp.sh --user admin --password secret
-#H#   ./local-ftp.sh --port 2121 --directory /path/to/share
+#H#   ./local-ftp.sh --ftp-port false         # disable FTP/FTPS
+#H#   ./local-ftp.sh --sftp-port 2022         # custom SFTP port
 #H#
 #H# Options:
-#H#   --user <username>      FTP username (default: user)
-#H#   --password <password>  FTP password (default: pass)
-#H#   --port <port>          FTP port (default: 2121)
-#H#   --directory <path>     Directory to share (default: current directory)
-#H#   -h --help              Shows this message
+#H#   --user      <username>        FTP username (default: user)
+#H#   --password  <password>        FTP password (default: pass)
+#H#   --ftp-port  <port | false>    FTP port (default: 2121) or false to disable
+#H#   --sftp-port <port | false>    SFTP port (default: 2222) or false to disable
+#H#   --http-port <port | false>    HTTP port (default: 8080) or false to disable
+#H#   --directory <path>            Directory to share (default: current directory)
+#H#   -h --help                     Shows this message
+#H#
+#H# For feedback or feature requests, please open an issue on the repository:
+#H#   - https://github.com/ivstiv/local-ftp
 #H#
 
 FTP_USER="user"
 FTP_PASS="pass"
 FTP_PORT="2121"
+SFTP_PORT="2222"
+HTTP_PORT="8080"
 FTP_DIR="."
 
 GREEN='\033[0;32m'
@@ -68,8 +76,16 @@ while [ "$#" -gt 0 ]; do
       FTP_PASS="$2"
       shift 2
       ;;
-    --port)
+    --ftp-port)
       FTP_PORT="$2"
+      shift 2
+      ;;
+    --sftp-port)
+      SFTP_PORT="$2"
+      shift 2
+      ;;
+    --http-port)
+      HTTP_PORT="$2"
       shift 2
       ;;
     --directory)
@@ -82,7 +98,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     *)
       print_color "$ORANGE" "Unknown parameter: $1"
-      echo "Usage: $0 [--user username] [--password password] [--port port] [--directory path]"
+      echo "Usage: $0 --help to show help"
       exit 1
       ;;
   esac
@@ -91,23 +107,60 @@ done
 FTP_DIR_ABS=$(realpath "$FTP_DIR")
 LOCAL_IP=$(getLocalIP)
 
-print_color "$BLUE" "================================================"
-print_color "$GREEN" "Starting FTP server with:"
-print_color "$BLUE" "  - User: $FTP_USER"
-print_color "$BLUE" "  - Password: $FTP_PASS"
-print_color "$BLUE" "  - Port: $FTP_PORT"
-print_color "$BLUE" "  - Directory: $FTP_DIR_ABS"
-print_color "$BLUE" "  - Local IP: $LOCAL_IP"
-print_color "$BLUE" "  - FTP URL: ftp://$FTP_USER:$FTP_PASS@$LOCAL_IP:$FTP_PORT"
-print_color "$BLUE" "================================================"
+print_color "$BLUE" "======================================================="
+print_color "$GREEN" "Starting server with:"
+print_color "$GREEN" "  - User: $FTP_USER"
+print_color "$GREEN" "  - Password: $FTP_PASS"
+[ "$FTP_PORT"  != "false" ] && print_color "$GREEN" "  - FTP Port: $FTP_PORT"
+[ "$SFTP_PORT" != "false" ] && print_color "$GREEN" "  - SFTP Port: $SFTP_PORT"
+[ "$HTTP_PORT" != "false" ] && print_color "$GREEN" "  - HTTP Port: $HTTP_PORT"
+print_color "$GREEN" "  - Directory: $FTP_DIR_ABS"
+print_color "$GREEN" "  - Local IP: $LOCAL_IP"
+[ "$FTP_PORT"  != "false" ] && print_color "$GREEN" "  - FTP URL: ftp://$FTP_USER:$FTP_PASS@$LOCAL_IP:$FTP_PORT"
+[ "$SFTP_PORT" != "false" ] && print_color "$GREEN" "  - SFTP URL: sftp://$FTP_USER:$FTP_PASS@$LOCAL_IP:$SFTP_PORT"
+[ "$HTTP_PORT" != "false" ] && print_color "$GREEN" "  - HTTP URL: http://$LOCAL_IP:$HTTP_PORT"
+print_color "$BLUE" "======================================================="
 
+PORT_FLAGS=""
+CLI_FLAGS=""
+ENV_FLAGS="-e SFTPGO_FTPD__BINDINGS__0__FORCE_PASSIVE_IP=${LOCAL_IP}"
+
+if [ "$FTP_PORT" != "false" ]; then
+  PORT_FLAGS="$PORT_FLAGS -p ${FTP_PORT}:2121 -p 30000-30009:30000-30009"
+  CLI_FLAGS="$CLI_FLAGS --ftpd-port 2121"
+  ENV_FLAGS="$ENV_FLAGS \
+    -e SFTPGO_FTPD__PASSIVE_PORT_RANGE__START=30000 \
+    -e SFTPGO_FTPD__PASSIVE_PORT_RANGE__END=30009"
+else
+  CLI_FLAGS="$CLI_FLAGS --ftpd-port -1"
+fi
+
+if [ "$SFTP_PORT" != "false" ]; then
+  PORT_FLAGS="$PORT_FLAGS -p ${SFTP_PORT}:2222"
+  CLI_FLAGS="$CLI_FLAGS --sftpd-port 2222"
+else
+  CLI_FLAGS="$CLI_FLAGS --sftpd-port -1"
+fi
+
+if [ "$HTTP_PORT" != "false" ]; then
+  PORT_FLAGS="$PORT_FLAGS -p ${HTTP_PORT}:8080"
+  CLI_FLAGS="$CLI_FLAGS --httpd-port 8080"
+else
+  CLI_FLAGS="$CLI_FLAGS --httpd-port -1"
+fi
+
+# don't double quote the flag variables
+# we need them to word split so docker sees them
+# as separate arguments
+# shellcheck disable=SC2086
 docker run --rm -it \
-  -p "${FTP_PORT}":21 \
-  -p 30000-30009:30000-30009 \
-  -v "${FTP_DIR_ABS}":/home/ftpuser/shared \
-  -e PUBLICHOST="${LOCAL_IP}" \
-  -e FTP_USER_NAME="${FTP_USER}" \
-  -e FTP_USER_PASS="${FTP_PASS}" \
-  -e FTP_USER_HOME=/home/ftpuser/shared \
-  stilliard/pure-ftpd
+  $PORT_FLAGS \
+  $ENV_FLAGS \
+  -v "${FTP_DIR_ABS}":/srv/data \
+  drakkan/sftpgo:latest \
+  sftpgo portable \
+    --directory /srv/data \
+    --username "${FTP_USER}" \
+    --password "${FTP_PASS}" \
+    $CLI_FLAGS
 

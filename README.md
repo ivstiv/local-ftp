@@ -1,6 +1,6 @@
 # Local FTP Server
 
-A simple shell script to quickly start a local FTP server using Docker.
+A zero-config shell script to quickly start a local FTP server using Docker to share files around your local network. You can choose to transport the files via FTP, SFTP, or a web interface. (SFTP being the most secure option of course.)
 
 ## Installation
 
@@ -54,16 +54,19 @@ local-ftp.sh — Local FTP server using Docker
 Examples:
   ./local-ftp.sh
   ./local-ftp.sh --user admin --password secret
-  ./local-ftp.sh --port 2121 --directory /path/to/share
+  ./local-ftp.sh --ftp-port false         # disable FTP/FTPS
+  ./local-ftp.sh --sftp-port 2022         # custom SFTP port
 
 Options:
-  --user <username>      FTP username (default: user)
-  --password <password>  FTP password (default: pass)
-  --port <port>          FTP port (default: 2121)
-  --directory <path>     Directory to share (default: current directory)
-  -h --help              Shows this message
+  --user      <username>        FTP username (default: user)
+  --password  <password>        FTP password (default: pass)
+  --ftp-port  <port | false>    FTP port (default: 2121) or false to disable
+  --sftp-port <port | false>    SFTP port (default: 2222) or false to disable
+  --http-port <port | false>    HTTP port (default: 8080) or false to disable
+  --directory <path>            Directory to share (default: current directory)
+  -h --help                     Shows this message
 ```
 
 ## How It Works
 
-The script uses the [stilliard/pure-ftpd](https://github.com/stilliard/docker-pure-ftpd) Docker image to run a containerized FTP server, making your specified directory available via FTP.
+The script uses the [drakkan/sftpgo](https://github.com/drakkan/sftpgo) Docker image to run a containerized FTP, SFTP, and HTTP server in [portable mode](https://docs.sftpgo.com/2.6/cli/#portable-mode), making your specified directory available via FTP, SFTP, and a web interface to the local network.
