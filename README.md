@@ -64,6 +64,7 @@ Options:
   --sftp-port <port | false>    SFTP port (default: 2222) or false to disable
   --http-port <port | false>    HTTP port (default: 8080) or false to disable
   --directory <path>            Directory to share (default: current directory)
+  --permissions <permissions>   FTP permissions (default: list,download,upload,overwrite,delete,rename,create_dirs)
   -h --help                     Shows this message
 ```
 

@@ -16,6 +16,7 @@
 #H#   --sftp-port <port | false>    SFTP port (default: 2222) or false to disable
 #H#   --http-port <port | false>    HTTP port (default: 8080) or false to disable
 #H#   --directory <path>            Directory to share (default: current directory)
+#H#   --permissions <permissions>   FTP permissions (default: list,download,upload,overwrite,delete,rename,create_dirs)
 #H#   -h --help                     Shows this message
 #H#
 #H# For feedback or feature requests, please open an issue on the repository:
@@ -28,6 +29,7 @@ FTP_PORT="2121"
 SFTP_PORT="2222"
 HTTP_PORT="8080"
 FTP_DIR="."
+FTP_PERMS="list,download,upload,overwrite,delete,rename,create_dirs"
 
 GREEN='\033[0;32m'
 ORANGE='\033[0;33m'
@@ -92,6 +94,10 @@ while [ "$#" -gt 0 ]; do
       FTP_DIR="$2"
       shift 2
       ;;
+    --permissions)
+      FTP_PERMS="$2"
+      shift 2
+      ;;
     -h|--help)
       help
       exit 0
@@ -122,7 +128,7 @@ print_color "$GREEN" "  - Local IP: $LOCAL_IP"
 print_color "$BLUE" "======================================================="
 
 PORT_FLAGS=""
-CLI_FLAGS=""
+CLI_FLAGS="--permissions ${FTP_PERMS}"
 ENV_FLAGS="-e SFTPGO_FTPD__BINDINGS__0__FORCE_PASSIVE_IP=${LOCAL_IP}"
 
 if [ "$FTP_PORT" != "false" ]; then
@@ -156,6 +162,7 @@ fi
 docker run --rm -it \
   $PORT_FLAGS \
   $ENV_FLAGS \
+  --user "$(id -u):$(id -g)" \
   -v "${FTP_DIR_ABS}":/srv/data \
   drakkan/sftpgo:latest \
   sftpgo portable \
